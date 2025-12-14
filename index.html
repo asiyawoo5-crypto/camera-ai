@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Teachable Machine Camera + Voice</title>
+
+<style>
+  body {
+    margin: 0;
+    background: black;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    color: white;
+    font-family: Arial, sans-serif;
+  }
+
+  #camera {
+    position: relative;
+    width: 360px;
+    height: 360px;
+  }
+
+  canvas {
+    width: 100%;
+    height: 100%;
+    border-radius: 20px;
+  }
+
+  #text {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    text-align: center;
+    font-size: 22px;
+    background: rgba(0,0,0,0.6);
+    padding: 10px;
+  }
+
+  button {
+    margin-bottom: 15px;
+    font-size: 18px;
+    padding: 8px 20px;
+  }
+</style>
+</head>
+
+<body>
+
+<button onclick="start()">Start</button>
+
+<div id="camera">
+  <div id="webcam"></div>
+  <div id="text">Waiting...</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+<script>
+const URL = "./my_model/"; // папка с распакованной моделью
+let model, webcam;
+let lastSpokenClass = "";
+
+async function start() {
+  const modelURL = URL + "model.json";
+  const metadataURL = URL + "metadata.json";
+
+  model = await tmImage.load(modelURL, metadataURL);
+
+  webcam = new tmImage.Webcam(360, 360, true);
+  await webcam.setup();
+  await webcam.play();
+
+  document.getElementById("webcam").appendChild(webcam.canvas);
+
+  loop();
+}
+
+async function loop() {
+  webcam.update();
+
+  const predictions = await model.predict(webcam.canvas);
+  let best = predictions[0];
+
+  for (let i = 1; i < predictions.length; i++) {
+    if (predictions[i].probability > best.probability) {
+      best = predictions[i];
+    }
+  }
+
+  const percent = (best.probability * 100).toFixed(0);
+  const text = best.className + " " + percent + "%";
+  document.getElementById("text").innerText = text;
+
+  // Озвучка, только если класс поменялся и вероятность > 90%
+  if (best.probability > 0.9 && lastSpokenClass !== best.className) {
+    speak(best.className);
+    lastSpokenClass = best.className;
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// Функция озвучки
+function speak(text) {
+  speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "en-US";
+  utterance.rate = 1;
+  speechSynthesis.speak(utterance);
+}
+</script>
+
+</body>
+</html>
